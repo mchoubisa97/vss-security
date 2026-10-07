@@ -590,7 +590,7 @@
   .fb-form input, .fb-form select, .fb-form textarea{width:100%; background:#1c1c1c; border:1px solid #333; color:#fff; padding:13px 14px; font-family:inherit; font-size:14.5px; border-radius:0; outline:none; transition:.2s;}
   .fb-form select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,#bbb 50%),linear-gradient(135deg,#bbb 50%,transparent 50%); background-position:calc(100% - 18px) 55%,calc(100% - 13px) 55%; background-size:5px 5px; background-repeat:no-repeat;}
   .fb-form textarea{min-height:110px; resize:vertical;}
-  .fb-form input:focus, .fb-form select:focus, .fb-form textarea:focus{border-color:var(--red-light); background:#222;}
+  .fb-form input:focus, .fb-form select:focus, .fb-form textarea:focus{border-color:var(--red-light); background-color:#222;}
   .fb-stars{display:flex; gap:6px;}
   .fb-stars button{background:none; border:none; padding:0; cursor:pointer;}
   .fb-stars svg{width:30px; height:30px; fill:#3a3a3a; transition:.15s;}
@@ -599,7 +599,10 @@
   .fb-send{grid-column:1/-1; display:flex; gap:12px; flex-wrap:wrap;}
   .fb-send .btn-wa{background:#25d366; color:#fff;} .fb-send .btn-wa:hover{background:#1eb257;}
   .fb-send .btn-outline{background:transparent; border-color:rgba(255,255,255,.4); color:#fff;}
-  .fb-form select option{color:#111; background:#fff;}
+  .fb-form select{color-scheme:dark;}
+  .fb-form select option, .fb-form select optgroup{background-color:#1c1c1c; color:#fff; font-family:'Inter',system-ui,sans-serif; padding:10px 14px;}
+  .fb-form select option:checked, .fb-form select option:hover{background:#b6122a linear-gradient(#b6122a,#b6122a); color:#fff;}
+  .fb-form select option[value=""]{color:#a9a6a3;}
   .fb-note{grid-column:1/-1; font-size:12px; color:#8f8b89; margin:0;}
   @media(max-width:900px){.fb-box{grid-template-columns:1fr;} .fb-form{grid-template-columns:1fr; padding:30px 24px;} .fb-side{padding:36px 24px;}}
 
@@ -1617,7 +1620,7 @@
             </div>
             <div><label for="cName">Full Name *</label><input id="cName" type="text" autocomplete="name"></div>
             <div><label for="cPhone">Mobile Number *</label><input id="cPhone" type="tel" autocomplete="tel"></div>
-            <div class="full"><label for="cEmail">Email <span style="text-transform:none; letter-spacing:0; color:#8f8b89;">(optional &mdash; we'll send you a confirmation)</span></label><input id="cEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
+            <div class="full"><label for="cEmail">Email <span style="text-transform:none; letter-spacing:0; color:#8f8b89;">(optional)</span></label><input id="cEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
             <div><label for="cAge">Age *</label><input id="cAge" type="number" min="18" max="65" inputmode="numeric"></div>
             <div><label for="cGender">Gender</label><select id="cGender"><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
             <div><label for="cCity">Current City / State *</label><input id="cCity" type="text"></div>
@@ -1981,7 +1984,13 @@
     const res=await fetch(INBOX_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},
       body:JSON.stringify(Object.assign({_subject:subject,_template:'table',_captcha:'false'},fields))});
     if(!res.ok) throw new Error('HTTP '+res.status);
-    return res;
+    // The email service can answer HTTP 200 and still refuse the message, so check its reply too.
+    let data=null; try{ data=await res.json(); }catch(e){}
+    if(data && (data.success===false || String(data.success).toLowerCase()==='false')){
+      console.warn('Form service rejected the submission:', data.message||data);
+      throw new Error(data.message||'Form service rejected the submission');
+    }
+    return data;
   }
   const toText=(title,fields)=>title+'\n\n'+Object.entries(fields).filter(([k,v])=>v&&v!=='-').map(([k,v])=>k+': '+v).join('\n');
   const openWA=m=>window.open('https://wa.me/918383001818?text='+encodeURIComponent(m),'_blank','noopener');
@@ -1990,11 +1999,12 @@
   const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function setDoneNote(id,email,phone){
     document.getElementById(id).innerHTML = email
-      ? 'A confirmation email will be sent to <b>'+esc(email)+'</b>.<span class="hi" lang="hi">पुष्टि ईमेल <b>'+esc(email)+'</b> पर भेजी जाएगी।</span>'
+      ? 'Our team will contact you on <b>'+esc(phone)+'</b> or at <b>'+esc(email)+'</b>.<span class="hi" lang="hi">हमारी टीम आपके नंबर <b>'+esc(phone)+'</b> या ईमेल <b>'+esc(email)+'</b> पर संपर्क करेगी।</span>'
       : 'Please keep your phone handy &mdash; our team will contact you on <b>'+esc(phone)+'</b>.<span class="hi" lang="hi">कृपया अपना फ़ोन पास रखें &mdash; हमारी टीम आपके नंबर <b>'+esc(phone)+'</b> पर संपर्क करेगी।</span>';
   }
   const emailOk=e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-  // Standard auto-generated acknowledgement sent to the person who filled the form (FormSubmit auto-response).
+  // NOTE: autoReply() is currently UNUSED. FormSubmit's _autoresponse does not work with AJAX forms or with reCAPTCHA disabled.
+  // Kept as the ready-made text for a service that can send the applicant a confirmation (e.g. EmailJS).
   function autoReply(name, body, team){
     const line='----------------------------------------------------------';
     return 'Dear '+name+',\n\nThank you for contacting Victas Security Services Pvt. Ltd.\n\n'+body+
@@ -2004,7 +2014,7 @@
   // Builds the payload: owner gets the full table; if applicant gave an email they also get the auto-reply.
   function withAuto(d){
     const p=Object.assign({},d.f);
-    if(d.email && d.auto){ delete p['Email']; p.email=d.email; p._autoresponse=d.auto; }
+    if(d.email){ delete p['Email']; p.email=d.email; } // FormSubmit uses `email` as Reply-To, so you can reply to the applicant directly
     return p;
   }
 
